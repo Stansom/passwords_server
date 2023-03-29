@@ -12,8 +12,13 @@
                 "user-agent" "python-urllib3/1.26.10"
                 #_#_"token" "8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750"
                 #_#_"Set-Cookie" '("username=b" "password=re")
-                #_#_"cookie"
-                  "SLG_G_WPT_TO=ru; SLG_GWPT_Show_Hide_tmp=undefined; SLG_wptGlobTipTmp=undefined; username=koha; password=miloha; token=8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750;"}
+                "cookie"
+                #_"SLG_G_WPT_TO=ru; SLG_GWPT_Show_Hide_tmp=undefined; SLG_wptGlobTipTmp=undefined;"
+                "SLG_G_WPT_TO=ru; 
+                 SLG_GWPT_Show_Hide_tmp=undefined; 
+                 SLG_wptGlobTipTmp=undefined; username=koha; 
+                 password=miloha; 
+                 token=_8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750;"}
                :server-port 3030,
                :content-length 0,
                :websocket? false,
@@ -21,7 +26,7 @@
                :character-encoding "utf8",
                :uri "/",
                :server-name "localhost",
-               :query-string "username=koha&password=miloha&urlpassword=asfwegfaa&url=freq.com&login=jooh",
+               :query-string nil  #_"username=koha&password=miloha&urlpassword=asfwegfaa&url=freq.com&login=jooh",
                :body nil #_(into-array Byte/TYPE "username=koha&password=miloha&urlpassword=asfwegfaa&url=freq.com&login=jooh"),
                :scheme :http,
                :request-method :get})

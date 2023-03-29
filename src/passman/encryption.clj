@@ -11,7 +11,7 @@
 (def encr-key (hash/sha256 "hyperhyper"))
 
 (defn encrypt-pass [p]
-  (if (not-empty p)
+  (if (seq p)
     (-> (crypto/block-cipher-encrypt (codecs/to-bytes p) encr-key encr-iv
                                      {:alg :aes128-cbc-hmac-sha256})
         (codecs/bytes->hex))
@@ -23,6 +23,7 @@
       (-> (crypto/block-cipher-decrypt (codecs/hex->bytes en) encr-key encr-iv {:alg :aes128-cbc-hmac-sha256})
           (codecs/bytes->str))
       (catch Exception _ nil))))
+
 (defn encr-token [u p]
   (encrypt-pass (str u ":;" p)))
 

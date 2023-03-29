@@ -169,6 +169,7 @@
   (-> req
       (result/of #(not (nil? (get-in % [:headers "cookie"]))))
       (result/map-ok parse-req-cookie)
+      (result/of #(and (:username %) (:password %)))
       (result/flat-map-ok
        #(auth-user-db (:username %) (:password %)))
       (result/map-ok (persist-and-wrap-token req))
@@ -192,7 +193,9 @@
       (result/of #(seq %))
       (result/flat-map-ok #(-> (system/check-session-token system/system %)
                                (result/of (complement nil?))))
-      (result/map-ok #((persist-and-wrap-token req) %))
+      (result/map-ok #(-> (persist-token-to-headers req %)
+                          (wrap-username (first
+                                          (encryption/decrypt-token %)))))
       #_(result/map-ok #(wrap-username req (first
                                             (encryption/decrypt-token %))))
       (result/map-err (constantly (auth-err-handler req)))))
@@ -201,9 +204,7 @@
   "Pass REQ thru all authorization functions, then returns
    authorized REQ if the tries was succefful otherwise error map"
   [req]
-  (-> req
-      (already-logged?)
-      (result/flat-map-err (comp auth-token :payload))
+  (-> req auth-token
       (result/flat-map-err (comp auth-up :payload))
       (result/flat-map-err (comp auth-body :payload))
       (result/flat-map-err (comp auth-cookie :payload))
@@ -222,7 +223,7 @@
   (-> req
       (result/flat-map-ok
        (fn [r]
-         (let [u (r :username)]
+         (when-let [u (r :username)]
            {:status 200
             :body (view/list-passwords u
                                        (db/list-passwords db/db u))})))
@@ -296,11 +297,11 @@
   [req]
   (-> req
       (result/flat-map-ok (fn [r]
-                            (when-let [{{:keys [id username newpassword]} :ok}
+                            (when-let [{{:keys [id newpassword]} :ok}
                                        (parse-multiple-query (:query-string r))]
                               (db/update-password db/db newpassword (parse-long id))
                               {:status 200
-                               :body (format "password with id %s for user %s was updated" id username)})))
+                               :body (format "password with id %s for user %s was updated" id (:username req))})))
 
       (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
 
@@ -309,11 +310,11 @@
   [req]
   (-> req
       (result/flat-map-ok (fn [r]
-                            (when-let [{{:keys [id username newurl]} :ok}
+                            (when-let [{{:keys [id newurl]} :ok}
                                        (parse-multiple-query (:query-string r))]
                               (db/update-url db/db newurl (parse-long id))
                               {:status 200
-                               :body (format "url with id %s for user %s was updated" id username)})))
+                               :body (format "url with id %s for user %s was updated" id (:username req))})))
 
       (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
 
@@ -322,11 +323,11 @@
   [req]
   (-> req
       (result/flat-map-ok (fn [r]
-                            (when-let [{{:keys [id username newlogin]} :ok}
+                            (when-let [{{:keys [id newlogin]} :ok}
                                        (parse-multiple-query (:query-string r))]
                               (db/update-login db/db newlogin (parse-long id))
                               {:status 200
-                               :body (format "login with id %s for user %s was updated" id username)})))
+                               :body (format "login with id %s for user %s was updated" id (:username req))})))
 
       (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
 
@@ -335,11 +336,11 @@
   [req]
   (-> req
       (result/flat-map-ok (fn [r]
-                            (when-let [{{:keys [id username]} :ok}
+                            (when-let [{{:keys [id]} :ok}
                                        (parse-multiple-query (:query-string r))]
                               (db/remove-entry db/db (parse-long id))
                               {:status 200
-                               :body (format "password with id %s for user %s was removed" id username)})))
+                               :body (format "password with id %s for user %s was removed" id (:username req))})))
       (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
 
 (defn login
@@ -361,6 +362,14 @@
                              :body (str "User was successfully logged out")}))
      (result/flat-map-err (constantly {:err {:info "no user to log-out"}})))))
 
+(defn login-post [req]
+  (-> req
+      (result/flat-map-ok (fn [r]
+                            {:status 200
+                             :body (format "User %s is successfully authorized" (:username r))}))
+      (result/flat-map-err (constantly {:status 401
+                                        :body "not authorized"}))))
+
 (def handler
   "Handlers map"
   {:login login
@@ -377,14 +386,15 @@
                      :middleware [auth?]}
    :list-passwords {:response list-passwords
                     :middleware [auth?]}
-   :list-view {:response
-               #(-> % list-view (save-token-to-cookie (:ok %)))
-               :middleware [auth?]}
+   :list-view {:response #(-> % list-view (save-token-to-cookie (:ok %)))
+               :middleware [#(-> % already-logged? (result/flat-map-err (comp auth-token :payload)) (result/flat-map-err (comp auth-up :payload)))]}
    :register-view register-view
    :register register-user
    :user-registered user-registered
    :random-password random-password
    :logout logout
+   :login-post {:response #(-> % login-post (save-token-to-cookie (:ok %)))
+                :middleware [#(-> % already-logged? (result/flat-map-err (comp auth-token :payload)))]}
    :create-db! (fn [_] (db/create-db! db/db))})
 
 (defn dispatch

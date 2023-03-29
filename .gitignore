@@ -1,3 +1,5 @@
 .clj-kondo/*
+.calva/*
 .lsp/*
+.vscode/*
 *.DS_Store

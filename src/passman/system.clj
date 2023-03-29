@@ -1,8 +1,8 @@
 (ns passman.system)
 
-(def system (atom {:port nil
-                   :server nil
-                   :session-keys #{}}))
+(defonce system (atom {:port nil
+                       :server nil
+                       :session-keys #{}}))
 
 (defn reset-session-keys! []
   (swap! system assoc-in [:session-keys] #{}))

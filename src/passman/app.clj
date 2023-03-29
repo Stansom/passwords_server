@@ -38,13 +38,16 @@
    {:path "/view/login"
     :methods {:get (fn [req] (hs/dispatch {:type :login :payload req}))}}
 
+   {:path "/login"
+    :methods {:post (fn [req] (hs/dispatch {:type :login-post :payload req}))}}
+
    {:path "/list"
     :methods {:get (fn [req] (hs/dispatch {:type :list-passwords :payload req}))}}
 
    {:path "/random"
     :methods {:get (fn [req] (hs/dispatch {:type :random-password :payload req}))}}
 
-   {:path "/registred"
+   {:path "/registered"
     :methods {:get (fn [req] (hs/dispatch {:type :user-registered :payload req}))}}
 
    {:path "/test"
