@@ -1,11 +1,10 @@
 (ns passman.passgen
-  (:require
-   [clojure.string :as s]))
+  #_(:require [clojure.string :as s]))
 
 (def symbols "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*")
 
-(defn exclude-spec-characters [s]
-  (s/replace s #"(?i)[^0-9a-z]" ""))
+#_(defn exclude-spec-characters [s]
+    (s/replace s #"(?i)[^0-9a-z]" ""))
 
 (defn generate-random-symbols
   ([length]

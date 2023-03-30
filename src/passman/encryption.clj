@@ -1,7 +1,6 @@
 (ns passman.encryption
-  (:require
-   [babashka.pods :as pods]
-   [clojure.string :as str]))
+  (:require [babashka.pods :as pods]
+            [clojure.string :as str]))
 (pods/load-pod 'org.babashka/buddy "0.3.3")
 (require '[pod.babashka.buddy.core.codecs :as codecs]
          '[pod.babashka.buddy.core.hash :as hash]

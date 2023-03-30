@@ -30,7 +30,7 @@
                                                       :style {:text-decoration "none"}} "Register"]]]])))
 
 (defn add-password []
-  [:form#form__addpassword {:method :get
+  [:form#form__addpassword {:method :post
                             :action "/add"
                             :style {:display "flex"
                                     :flex-direction "column"
@@ -72,22 +72,25 @@
                                         [:div {:style
                                                {:display "flex"
                                                 :flex-direction "row"
-                                                :width "70%"
+                                                :width "95%"
                                                 :height "50px"
                                                 :justify-content "space-between"
                                                 :align-items "center"}}
                                          [:li [:h4 "login"]] [:li [:h4 "password"]]]
-                                        (map (fn [e] [:div {:style
-                                                            {:display "flex"
-                                                             :flex-direction "row"
-                                                             :width "100%"
-                                                             :height "50px"
-                                                             :justify-content "space-between"
-                                                             :align-items "center"
-                                                             :border-top "1px solid black"}}
-                                                      #_[:li {:style {:width "20%" :text-align "left"}} (:username e)]
+                                        (map (fn [e] [:div
+                                                      {:id (:id e)
+                                                       :style
+                                                       {:display "flex"
+                                                        :flex-direction "row"
+                                                        :width "100%"
+                                                        :height "50px"
+                                                        :justify-content "space-between"
+                                                        :align-items "center"
+                                                        :border-top "1px solid black"}}
                                                       [:li {:style {:width "50%" :text-align "left"}} (:url e)]
-                                                      [:li {:style {:width "50%" :text-align "right"}} (:password e)]]) pm)]])))
+                                                      [:li {:style {:width "50%" :text-align "right"}} [:div {:style
+                                                                                                              {:display :inline-block}} (:password e)
+                                                                                                        [:span {:style {:visibility :hidden}}]]]]) pm)]])))
 
 (defn register [_]
   (html-wrap (html/html {:mode :html}

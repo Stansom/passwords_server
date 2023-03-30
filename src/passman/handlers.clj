@@ -1,14 +1,13 @@
 (ns passman.handlers
-  (:require
-   [babashka.json :as json]
-   [clojure.string :as str]
-   [passman.db :as db]
-   [passman.encryption :as encryption]
-   [passman.result :as result]
-   [passman.view :as view]
-   [passman.passgen :as gen]
-   [passman.system :as system]
-   [clojure.core :as c]))
+  (:require [babashka.json :as json]
+            [clojure.core :as c]
+            [clojure.string :as str]
+            [passman.db :as db]
+            [passman.encryption :as encryption]
+            [passman.passgen :as gen]
+            [passman.result :as result]
+            [passman.system :as system]
+            [passman.view :as view]))
 
 (defn parse-query
   "Parse uname=name to [uname name]"
@@ -149,6 +148,7 @@
   (-> req :headers (get "token")
       (result/of #(seq %))
       (result/flat-map-ok #(-> (encryption/decrypt-token %) (result/of (complement nil?))))
+      (result/flat-map-ok (fn [r] (-> r (result/of #(and (seq (first %)) (seq (second %)))))))
       (result/flat-map-ok
        #(auth-user-db (first %) (second %)))
       (result/map-ok (persist-and-wrap-token req))
@@ -158,6 +158,7 @@
   "Tries to authorize by user/password presented in the query-string"
   [req]
   (-> req :query-string (parse-multiple-query)
+      (result/flat-map-ok (fn [r] (-> r (result/of #(and (:username %) (:password %))))))
       (result/flat-map-ok
        #(auth-user-db (:username %) (:password %)))
       (result/map-ok (persist-and-wrap-token req))
@@ -167,8 +168,8 @@
   "Tries to authorize by cookies user/password fields"
   [req]
   (-> req
-      (result/of #(not (nil? (get-in % [:headers "cookie"]))))
-      (result/map-ok parse-req-cookie)
+      (result/of #(seq (get-in % [:headers "cookie"])))
+      (result/flat-map-ok parse-req-cookie)
       (result/of #(and (:username %) (:password %)))
       (result/flat-map-ok
        #(auth-user-db (:username %) (:password %)))
@@ -181,6 +182,7 @@
   (-> req parse-post-body
       (result/of #(seq %))
       (result/flat-map-ok parse-multiple-query)
+      (result/flat-map-ok (fn [r] (-> r (result/of #(and (:username %) (:password %))))))
       (result/flat-map-ok
        #(auth-user-db (:username %) (:password %)))
       (result/map-ok (persist-and-wrap-token req))
@@ -196,8 +198,6 @@
       (result/map-ok #(-> (persist-token-to-headers req %)
                           (wrap-username (first
                                           (encryption/decrypt-token %)))))
-      #_(result/map-ok #(wrap-username req (first
-                                            (encryption/decrypt-token %))))
       (result/map-err (constantly (auth-err-handler req)))))
 
 (defn auth?
@@ -273,16 +273,13 @@
   [req]
   (-> req
       (result/flat-map-ok
-       (fn [r]
-         (result/flat-map-ok
-          ((comp parse-multiple-query :query-string) r)
-          (fn [{:keys [url login urlpassword]}]
-            (check-pers [url login urlpassword]
-                        (fn []
-                          (let [username (get r :username)]
-                            (db/insert-pass! db/db username url login urlpassword)
-                            (list-view r))))))))
-      (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
+       (fn [r] (-> r parse-post-body parse-multiple-query
+                   (result/flat-map-ok (fn [q] (result/of q #(and (:url %) (:login %) (:urlpassword %)))))
+                   (result/flat-map-ok #(let [{:keys [url login urlpassword]} %
+                                              u (:username r)]
+                                          (db/insert-pass! db/db u url login urlpassword)
+                                          {:status 200 :body "new entry succefully added"})))))
+      (result/flat-map-err (constantly {:status 401 :body (str :not-authorized)}))))
 
 (def random-password
   "Handles random password generation"
@@ -375,7 +372,7 @@
   {:login login
    :root-view root-view
    :add {:response add-entry
-         :middleware [auth?]}
+         :middleware [#(-> % already-logged? (result/flat-map-err (comp auth-token :payload)) (result/flat-map-err (comp auth-up :payload)))]}
    :update-password {:response update-password
                      :middleware [auth?]}
    :update-url {:response update-url
@@ -386,7 +383,8 @@
                      :middleware [auth?]}
    :list-passwords {:response list-passwords
                     :middleware [auth?]}
-   :list-view {:response #(-> % list-view (save-token-to-cookie (:ok %)))
+   :list-view {:response
+               #(-> % list-view (save-token-to-cookie (:ok %)))
                :middleware [#(-> % already-logged? (result/flat-map-err (comp auth-token :payload)) (result/flat-map-err (comp auth-up :payload)))]}
    :register-view register-view
    :register register-user
@@ -404,7 +402,7 @@
    on the payload data finally calls response function over
    all middleware functions 
    "
-  [{:keys [type payload] :as p}]
+  [{:keys [type payload]}]
   (let [f (get handler type)]
     (if (:middleware f)
       (let [fx (:response f)
