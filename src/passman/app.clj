@@ -1,13 +1,12 @@
 (ns passman.app
   (:refer-clojure :exclude [list])
-  (:require
-   [clojure.pprint :as pprint]
-   [clojure.tools.cli :refer [parse-opts]]
-   [org.httpkit.server :as server]
-   [passman.handlers :as hs]
-   [passman.system :as system]
-   [ruuter.core :as ruuter]
-   [passman.routes :as rb]))
+  (:require [clojure.pprint :as pprint]
+            [clojure.tools.cli :refer [parse-opts]]
+            [org.httpkit.server :as server]
+            [passman.handlers :as hs]
+            [passman.routes :as rb]
+            [passman.system :as system]
+            [ruuter.core :as ruuter]))
 
 (def cli-options
   ;; An option with a required argument
@@ -89,7 +88,7 @@
   (run-server (:port @system/system)))
 
 (defn -main [& args]
-  (let [{:keys [arguments options]} (parse-opts args cli-options)
+  (let [{:keys [_ options]} (parse-opts args cli-options)
         {:keys [port stop]} options]
     #_(println arguments options)
     (cond
