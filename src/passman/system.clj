@@ -19,6 +19,7 @@
 (comment
   @system
   (reset-session-keys!)
+  (persist-session-token! system "8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750")
 
   ;;
   )

@@ -8,23 +8,38 @@
 (pods/load-pod 'org.babashka/postgresql "0.1.0")
 (require '[pod.babashka.postgresql :as pg])
 
-(def test-db {:dbtype   "postgresql"
+(pods/load-pod 'org.babashka/go-sqlite3 "0.1.0")
+(require '[pod.babashka.go-sqlite3 :as sqlite])
+
+#_(def test-db {:dbtype   "postgresql"
+                :host     "localhost"
+                :dbname   "testdb"
+                :port     5432})
+
+(def test-db {:dbtype   "sqlite"
               :host     "localhost"
-              :dbname   "testdb"
+              :dbname   "testdb_sqlite"
               :port     5432})
 
 (defn delete-table! [t]
   (pg/execute! test-db (-> {:drop-table [:if-exists t]} (sql/format))))
 
 (defn table-exists? [t]
-  (:tables/table_name (first (pg/execute! test-db [(format "SELECT table_name FROM information_schema.tables WHERE table_name='%s'" (name t))]))))
+  (case (test-db :dbtype)
+    "sqlite" (sqlite/query (test-db :dbname) [(format "SELECT name FROM sqlite_master WHERE type='table' AND name='%s'" (name t))])
+    "postgresql" (:tables/table_name (first (pg/execute! test-db [(format "SELECT table_name FROM information_schema.tables WHERE table_name='%s'" (name t))])))))
 
 (comment
+
+  (let [bn (slurp "testdb_sqlite")]
+    bn)
 
   (pg/execute! test-db (-> {:select [:u.username :p.url :p.password]
                             :from [[:users :u]]
                             :join [[:passwords :p] [:= :u.username :p.username]]
                             :where [:= :u.username "list"]} (sql/format)))
+
+  (sqlite/query (test-db :dbname) ["SELECT name FROM sqlite_master WHERE type='table' AND name='testdb_sqlite'"])
 
   (pg/execute! test-db ["create database testdb"])
   (pg/execute! test-db ["SELECT current_database()"])
@@ -81,7 +96,8 @@
           _ (db/delete-table! test-db :passwords)
           _ (db/create-db! test-db)
           _ (db/insert-pass! test-db "test-user" "fb.com" "test-login" "test-pass")
-          s (first (db/select-from test-db :passwords [:= :username "test-user"]))]
+          s (first (db/select-from test-db :passwords [:*] [:= :username "test-user"]))]
+
       (is (= "test-user" (:passwords/username s)))
       (is (= "fb.com" (:passwords/url s)))
       (is (= "test-login" (:passwords/login s)))
@@ -93,17 +109,23 @@
                  :columns [:username :password]
                  :values [["test-user" "test-pass"]]
                  :on-conflict {:do-nothing true}} (sql/format))
+          _ (db/create-db! test-db)
           _ (db/insert-user test-db "test-user" "test-pass")
-          s (first (db/select-from test-db :users [:= :username "test-user"]))]
+          s (first (db/select-from test-db :users [:*] [:= :username "test-user"]))]
       (is (= "test-user" (:users/username s)))
       (is (= "ab74f925ee028d532a3cbda6cabe5635775670427bf8f3cad50c741cb70413d9" (:users/password s)))
       (is (= ["INSERT INTO users (username, password) VALUES (?, ?) ON CONFLICT DO NOTHING" "test-user" "test-pass"] q))))
 
   (testing "Table update"
-    (let [_ (db/update-table test-db :users :username "updated-user-name" [:= :username "test-user"])
-          s (first (pg/execute! test-db (-> {:select [:username :password]
-                                             :from :users
-                                             :where [:= :username "updated-user-name"]} (sql/format))))]
+    (let [_ (db/delete-table! test-db :users)
+          _ (db/create-db! test-db)
+          _ (db/insert-user test-db "test-user" "test-pass")
+          _ (db/update-table test-db :users :username "updated-user-name" [:= :username "test-user"])
+          s (first
+             (db/select-from test-db {:select [:username :password]
+                                      :from :users
+                                      :where [:= :username "updated-user-name"]}))]
+
       (is (= "updated-user-name" (:users/username s)))))
 
   (testing "Find password"
@@ -133,7 +155,14 @@
           _ (db/delete-table! test-db :passwords)
           _ (db/create-db! test-db)
           _ (db/insert-user test-db "list" "list-pass")
+          _ (db/select-from test-db {:select [:username :password :id]
+                                     :from :users
+                                     :where [:= :username "list"]})
           _ (doall (map (fn [n] (db/insert-pass! test-db "list" (str n ".com") (str "login-" n) (str n))) (range 10)))
+          _ (db/select-from test-db {:select [:p.login :p.url :p.password :p.id]
+                                     :from [[:users :u]]
+                                     :join [[:passwords :p] [:= :u.username :p.username]]
+                                     :where [:= :u.username "list"]})
           m (map (fn [n]
                    {:password (str n)
                     :url (str n ".com")
@@ -142,6 +171,7 @@
 
           r (db/list-passwords test-db "list")]
       (is (= m r))))
+
   (testing "Entry removing"
     (let [_ (db/delete-table! test-db :users)
           _ (db/delete-table! test-db :passwords)
@@ -194,4 +224,5 @@
              (first (db/list-passwords test-db "user-1"))))))
 ;;
   )
-;; (clojure.test/run-tests)
+
+(clojure.test/run-tests)

@@ -7,10 +7,13 @@
   {:err v})
 
 (defn ok? [r]
-  (contains? r :ok))
+  (when (map? r)
+    (contains? r :ok)))
+
 
 (defn err? [r]
-  (contains? r :err))
+  (when (map? r)
+    (contains? r :err)))
 
 (defn map-ok [r f]
   (if (ok? r)

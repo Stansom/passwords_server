@@ -1,35 +1,33 @@
 (ns passman.db
   (:require
-   [babashka.fs :as fs]
-   [babashka.pods :as pods]
    [clojure.edn :as edn]
-   [honey.sql :as sql]
-   [passman.encryption :as encryption]))
-
-(pods/load-pod 'org.babashka/postgresql "0.1.0")
-(require '[pod.babashka.postgresql :as pg])
-
-(pods/load-pod 'org.babashka/go-sqlite3 "0.1.0")
-(require '[pod.babashka.go-sqlite3 :as sqlite])
+   [passman.encryption :as encryption]
+   [passman.dbs.postgres :as pgs]
+   [passman.dbs.sqlite :as sqlite]))
 
 (def conf (edn/read-string (slurp "config.edn")))
 
-(def db (or (:db conf) {:dbtype   "postgresql"
+(def db (or (:db conf) {:dbtype   "sqlite"
                         :host     "localhost"
-                        :dbname   "postgres"
-                        :user     "postgres"
-                        :password ""
+                        :dbname   "passwords.db"
                         :port     5432}))
 
-(def dbs {"postgresql" {:create-db! 'dbs.postgres/hi
-                        :insert-into 'dbs.postgres/send-hello}})
+(def dbs {"postgresql" {:create-db! pgs/create-db!
+                        :insert-into pgs/insert-into
+                        :select-from pgs/select-from
+                        :delete-from pgs/delete-from
+                        :update-table pgs/update-table
+                        :delete-table! pgs/delete-table!}
+          "sqlite" {:create-db! sqlite/create-db!
+                    :insert-into sqlite/insert-into
+                    :select-from sqlite/select-from
+                    :delete-from sqlite/delete-from
+                    :update-table sqlite/update-table
+                    :delete-table! sqlite/delete-table!}})
 
-(comment
-  @(resolve ((dbs "postgresql") :create-db!))
-  ((resolve ((dbs "postgresql") :insert-into)) "sa")
-
-  (resolve (symbol (str (dbs "postgresql")) "hi"))
-  ((resolve (symbol (str (dbs "postgresql")) "send-hello"))))
+(defn run-command [{dbtype :dbtype} command]
+  ((dbs dbtype) command)
+  #_(resolve ((dbs dbtype) command)))
 
 (def create-passwords-table-query  {:create-table [:passwords :if-not-exists]
                                     :with-columns [[:id :serial :primary-key]
@@ -44,22 +42,11 @@
                                               [:password :text [:not nil]]
                                               [[:unique nil :username]]]})
 
-(def db-commands {:execute! {"postgresql" pg/execute!
-                             "sqlite" sqlite/execute!}
-                  :query {"sqlite" sqlite/query
-                          "postgresql" pg/execute!}})
-
-(defn db-adapter [{dbtype :dbtype} command]
-  (when-let [cmd (db-commands command)]
-    (cmd dbtype)))
-
-#_(defn delete-table! [db t]
-    (pg/execute! db (-> {:drop-table [:if-exists t]} (sql/format))))
+(defn delete-table! [db t]
+  ((run-command db :delete-table!) db t))
 
 (defn update-table [db t k v clause]
-  (pg/execute! db (-> {:update [t]
-                       :set {k v}
-                       :where [clause]} (sql/format))))
+  ((run-command db :update-table) db t k v clause))
 
 (defn insert-into
   "t    => table name as keyword
@@ -68,11 +55,7 @@
      :values  [vector of values]
    }"
   [db t opts]
-  (let [{:keys [columns values]} opts]
-    (pg/execute! db (-> {:insert-into t
-                         :columns columns
-                         :values [values]
-                         :on-conflict {:do-nothing true}} (sql/format)))))
+  ((run-command db :insert-into) db t opts))
 
 #_(defn list-table
     "t => table name as keyword"
@@ -80,43 +63,8 @@
     (pg/execute! db (-> {:select [:*]
                          :from t} (sql/format))))
 
-(defmulti create-db! :dbtype)
-
-(defmethod create-db! "sqlite"
-  [{dbname :dbname}]
-  (sqlite/execute! dbname (-> create-passwords-table-query
-                              (sql/format)))
-  (sqlite/execute! dbname (-> create-users-table-query
-                              (sql/format)))
-  #_(when-not (fs/exists? dbname)))
-
-(defmethod create-db! "postgresql"
-  [db]
-  (pg/execute! db (-> create-passwords-table-query
-                      (sql/format)))
-  (pg/execute! db (-> create-users-table-query
-                      (sql/format))))
-
-(defmethod create-db! :default
-  [db]
-  (format "Create DB function is not implemented for %s DB type!" (:dbtype db)))
-
-(comment
-  (create-db! (assoc db :dbtype "sqlite"))
-
-  (sqlite/query "postgres" (-> {:select [:url :password :rowid]
-                                :from :passwords}
-                               (sql/format)))
-
-  (sqlite/query "postgres" (-> {:insert-into :passwords
-                                :columns [:url :username :password :login]
-                                :values [["url" "u2" "p2" "22lll.com"]]
-                                :on-conflict {:do-nothing true}} (sql/format))))
-#_(defn- add-id-column [db t]
-    (pg/execute! db
-                 (-> {:alter-table [t]
-                      :add-column [:id :serial :primary-key]}
-                     (sql/format))))
+(defn create-db! [db]
+  ((run-command db :create-db!) db [create-passwords-table-query create-users-table-query]))
 
 (defn insert-pass! [db user url login pass]
   (if (and (pos? (count url)) (pos? (count user)) (pos? (count pass)) (pos? (count login)))
@@ -137,23 +85,35 @@
 
 (defn select-from
   ([db qry]
-   (pg/execute! db (-> qry (sql/format))))
+   (map (fn [m] (update-keys m
+                             #(if (and (not (qualified-keyword? %)) (not (number? %)))
+                                (let [qr (if (qry :join)
+                                           (ffirst (qry :join))
+                                           (:from qry))
+                                      kw (name qr)]
+                                  (keyword kw (name %)))
+                                %))) ((run-command db :select-from) db qry)))
   ([db t fs q]
-   (pg/execute! db (-> {:select [fs]
-                        :from [t]
-                        :where [q]} (sql/format)))))
+   (map (fn [m] (update-keys m
+                             #(if (and (not (qualified-keyword? %)) (not (number? %)))
+                                (let [kw (name t)]
+                                  (keyword kw (name %)))
+                                %))) ((run-command db :select-from) db t fs q))))
 
 (defn delete-from [db t clause]
-  (pg/execute! db (-> {:delete-from [t]
-                       :where [clause]} (sql/format))))
+  ((run-command db :delete-from) db t clause))
 
-#_(defn find-password [db t u]
-    (-> (pg/execute! db (-> {:select [:password]
-                             :from [t]
-                             :where [:= :username u]
-                             :limit 1} (sql/format)))
-        first
-        (get (keyword (name t) "password"))))
+(defn find-password [db t u]
+  (-> (select-from db {:select [:password]
+                       :from t
+                       :where [:= :username u]
+                       :limit 1})
+      first
+      (get (keyword (name t) "password"))))
+(contains? {:select [:p.login :p.url :p.password :p.id]
+            :from [[:users :u]]
+            :join [[:passwords :p] [:= :u.username :p.username]]
+            :where [:= :u.username "s"]} :join)
 
 (defn list-passwords [db u]
   (map (fn [e]

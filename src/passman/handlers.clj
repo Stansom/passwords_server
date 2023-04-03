@@ -132,7 +132,7 @@
 (defn- auth-user-db
   "Checks that such user exist in DB"
   [user pass]
-  (-> (db/select-from db/db :users
+  (-> (db/select-from db/db :users [:*]
                       [:and
                        [:= :username user]
                        [:= :password (encryption/encrypt-pass pass)]])
@@ -227,7 +227,7 @@
            {:status 200
             :body (view/list-passwords u
                                        (db/list-passwords db/db u))})))
-      (result/flat-map-err (fn [e] {:status 401 :body (str (:info e))}))))
+      (result/flat-map-err (constantly {:status 401 :body (str "Not registered user")} #_{:status 401 :body (str (:info e))}))))
 
 (defn list-passwords
   "Handles list passwords path, returns json"
@@ -238,7 +238,7 @@
                                      :headers {"Content-Type" "application/json"}
                                      :body (json/write-str
                                             (db/list-passwords db/db u))})))
-      (result/flat-map-err (constantly {:status 401 :body :not-authorized}))))
+      (result/flat-map-err (constantly {:status 401 :body (json/write-str "not registered user")}))))
 
 (defn user-registered
   "Handles user was successfully registered view path"
@@ -249,24 +249,29 @@
 (defn register-user
   "Handles register user path"
   [req]
-  (-> req :query-string parse-multiple-query
-      (result/flat-map-ok (fn [{:keys [username password]}]
-                            (check-pers [username password]
-                                        (fn []
-                                          (db/insert-user db/db username password)
-                                          {:status 200
-                                           :body (str "User " username " was successfully added.")}))))
-      (result/flat-map-err (fn [r]
+  #_req
+  (-> req parse-post-body
+      (result/of #(seq %))
+      (result/flat-map-ok parse-multiple-query)
+      (result/flat-map-ok (fn [r] (result/of r #(and (:username %) (:password %)))))
+      (result/flat-map-ok (fn [{:keys [:username :password]}]
+                            (db/insert-user db/db username password)
+                            (user-registered username)
+                            #_{:status 200
+                               :body (str "User " username " was successfully added.")}))
+      (result/flat-map-err (fn [_]
                              {:status 400
-                              :body (str (:info r))}))))
+                              :body "can't register an user"}))))
 
 (defn register-view
   "Handles register user view path"
   [req]
-  (if (= (:status (register-user req)) 200)
-    (let [n (get-in (parse-multiple-query (:query-string req)) [:ok :username])] (user-registered n))
-    {:status 200
-     :body (view/register req)}))
+  {:status 200
+   :body (view/register req)}
+  #_(if (= (:status (register-user req)) 200)
+      (let [n (get-in (parse-multiple-query (:query-string req)) [:ok :username])] (user-registered n))
+      {:status 200
+       :body (view/register req)}))
 
 (defn add-entry
   "Handles new password entry path"
@@ -356,6 +361,7 @@
      (result/flat-map-ok #(do
                             (system/remove-session-token! system/system %)
                             {:status 200
+                             :headers {"Set-Cookie" "token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"}
                              :body (str "User was successfully logged out")}))
      (result/flat-map-err (constantly {:err {:info "no user to log-out"}})))))
 
@@ -387,7 +393,10 @@
                #(-> % list-view (save-token-to-cookie (:ok %)))
                :middleware [#(-> % already-logged? (result/flat-map-err (comp auth-token :payload)) (result/flat-map-err (comp auth-up :payload)))]}
    :register-view register-view
-   :register register-user
+   :register {:response #(-> %
+                             (result/flat-map-ok  (fn [_]  {:status 200 :body (view/logout?)}))
+                             (result/flat-map-err (fn [r]  (register-user (:payload r)))))
+              :middleware [already-logged?]}
    :user-registered user-registered
    :random-password random-password
    :logout logout

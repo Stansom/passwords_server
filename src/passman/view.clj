@@ -108,8 +108,8 @@
                                          :align-items "center"
                                          :justify-content "center"}}
                           [:h1.block.fixed.accent "Registration"]
-                          [:form {:method :get
-                                  :action ""
+                          [:form {:method :post
+                                  :action "/register"
                                   :style {:display "flex"
                                           :flex-direction "column"
                                           :align-items "center"
@@ -121,11 +121,12 @@
                                                                                          :height "35px"}}]
                            [:input#pass.fixed.wrapper.block.input__password {:placeholder "Enter password here"
                                                                              :name "password"
+                                                                             :type "password"
                                                                              :value ""
                                                                              :style {:width "35vw"
                                                                                      :height "35px"}}]
                            [:button.block.send__register {#_#_:href "/view/list"
-                                                          #_#_:type "submit"
+                                                          :type "submit"
                                                           :style {:text-decoration "none"}} "register"]]]])))
 
 (defn random-password [n]
@@ -187,6 +188,7 @@
                                                                                                        :height "35px"}}]
                                          [:input#pass.fixed.wrapper.block.input__password {:placeholder "Enter password here"
                                                                                            :name "password"
+                                                                                           :type "password"
                                                                                            :value ""
                                                                                            :style {:width "35vw"
                                                                                                    :height "35px"}}]
@@ -216,3 +218,25 @@
                                                  :justify-content "center"}}
                            [:a#login_button.block {:href "/view/login"
                                                    :style {:text-decoration "none"}} "Login"]]]])))
+
+(defn logout? []
+  (html-wrap (html/html {:mode :html}
+                        [:body
+                         {:style {:display "flex"
+                                  :flex-direction "column"
+                                  :width "100vw"
+                                  :height "100vh"
+                                  :align-items "center"
+                                  :justify-content "center"}}
+                         [:main {:style {:display "flex"
+                                         :flex-direction "column"
+                                         :width "50vw"
+                                         :height "100vh"
+                                         :align-items "center"
+                                         :justify-content "center"}}
+                          [:h1.block.fixed.accent "Do you want to log out?"]
+                          [:div.buttons {:style {:display "flex"
+                                                 :width "30%"
+                                                 :justify-content "center"}}
+                           [:a#login_button.block {:href "/logout"
+                                                   :style {:text-decoration "none"}} "Log out"]]]])))

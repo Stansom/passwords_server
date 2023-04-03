@@ -31,10 +31,4 @@
     (when de
       (str/split de #":;"))))
 
-(comment
-
-  (decrypt-token "!8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750")
-
-  (encr-token "koha" "miloha")
-  (decrypt-token "0550481c911d6ca195d7a67ee9e4d6f28d621106c86f7b5e69d2d921760fe18a:;e820110206868708808d3fbf8404761aa14f38312e1143b51b529131f58fbd56"))
 

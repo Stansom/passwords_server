@@ -18,7 +18,7 @@
                  SLG_GWPT_Show_Hide_tmp=undefined; 
                  SLG_wptGlobTipTmp=undefined; username=koha; 
                  password=miloha; 
-                 token=8b5100074504c501f665b04879d0554700a6870d8c299d4590b0ea2c86aa2750;"}
+                 token=02508191522f60c3030c8664d9c081bacc6b6c663fc60a9369f369a95fe95ebe;"}
                :server-port 3030,
                :content-length 0,
                :websocket? false,
@@ -27,18 +27,9 @@
                :uri "/",
                :server-name "localhost",
                :query-string nil #_"username=koha&password=miloha&urlpassword=111new&url=111goo.com&login=jooh",
-               :body (into-array Byte/TYPE "urlpassword=secret&url=oolo.com&login=jooh"),
+               :body (into-array Byte/TYPE "password=mgcz&username=kcz" #_"urlpassword=secret&url=oolo.com&login=jooh"),
                :scheme :http,
                :request-method :get})
-
-(comment
-  (h/auth-up mock-req)
-  (h/add-entry mock-req)
-
-  (h/dispatch {:type :add :payload mock-req})
-  (h/auth-cookie mock-req)
-  ;;
-  )
 
 (deftest queries-test
   (testing "Parse simple query"

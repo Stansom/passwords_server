@@ -1,31 +1,17 @@
-(ns dbs.postgres
+(ns passman.dbs.postgres
   (:require
-   [babashka.fs :as fs]
    [babashka.pods :as pods]
-   [clojure.edn :as edn]
-   [honey.sql :as sql]
-   [passman.encryption :as encryption]))
+   [honey.sql :as sql]))
 
 (pods/load-pod 'org.babashka/postgresql "0.1.0")
 (require '[pod.babashka.postgresql :as pg])
 
-(def create-passwords-table-query  {:create-table [:passwords :if-not-exists]
-                                    :with-columns [[:id :serial :primary-key]
-                                                   [:url :text [:not nil]]
-                                                   [:username :text [:not nil]]
-                                                   [:password :text [:not nil]]
-                                                   [:login :text [:not nil]]]})
-
-(def create-users-table-query {:create-table [:users :if-not-exists]
-                               :with-columns [[:id :serial :primary-key]
-                                              [:username :text [:not nil]]
-                                              [:password :text [:not nil]]
-                                              [[:unique nil :username]]]})
-
 (defn create-db! [db qrs]
   (when (seq qrs)
-    (recur (pg/execute! db (-> (first qrs)
-                               (sql/format))) (rest qrs))))
+    (println (first qrs))
+    (recur (do
+             (pg/execute! db (-> (first qrs)
+                                 sql/format)) db) (rest qrs))))
 
 (defn insert-into [db t opts]
   (let [{:keys [columns values]} opts]
@@ -34,11 +20,22 @@
                          :values [values]
                          :on-conflict {:do-nothing true}} (sql/format)))))
 
-(defn select-from [db t fs q]
-  (pg/execute! db (-> {:select [fs]
-                       :from [t]
-                       :where [q]} (sql/format))))
+(defn update-table [db t k v clause]
+  (pg/execute! db (-> {:update [t]
+                       :set {k v}
+                       :where [clause]} (sql/format))))
+
+(defn select-from
+  ([db qry]
+   (pg/execute! db (-> qry (sql/format))))
+  ([db t fs q]
+   (pg/execute! db (-> {:select fs
+                        :from [t]
+                        :where [q]} (sql/format)))))
 
 (defn delete-from [db t clause]
   (pg/execute! db (-> {:delete-from [t]
                        :where [clause]} (sql/format))))
+
+(defn delete-table! [db t]
+  (pg/execute! db (-> {:drop-table [:if-exists t]} (sql/format))))
