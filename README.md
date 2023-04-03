@@ -17,7 +17,8 @@
 ```console
 cd "/path/to/cloned/repo"
 ```
-4. Run the command to start server and you can specify a port by using '-p' option:
+5. Configure Database in config.edn, you can choose between Postgres and SQLite if you don't want to run a server for PostgresQL. SQlite is chosen by default.
+6. Run the command to start server and you can specify a port by using '-p' option:
 ```console
 bb -m passman.app -p 8888
 ```
