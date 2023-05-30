@@ -15,8 +15,6 @@
     :parse-fn #(Integer/parseInt %)
     :validate [#(< 0 % 65535)  "Must be a number from 0 to 65535"]]])
 
-(parse-opts "" cli-options)
-
 (def routes
   [{:path "/"
     :methods {:get (fn [req] (hs/dispatch {:type :root-view :payload req}))}}
@@ -89,16 +87,15 @@
 
 (defn -main [& args]
   (let [{:keys [_ options]} (parse-opts args cli-options)
-        {:keys [port stop]} options]
-    #_(println arguments options)
+        {:keys [port]} options]
     (cond
       port (do (run-server port) @(promise))
-      stop (stop-server)
       :else (println "nothing"))))
 
 (comment
-  (-main "--stop")
   (stop-server)
   (run-server 3030)
   @system/system
-  (restart-server))
+  (restart-server)
+  ;;
+  )

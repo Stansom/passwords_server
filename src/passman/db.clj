@@ -110,10 +110,6 @@
                        :limit 1})
       first
       (get (keyword (name t) "password"))))
-(contains? {:select [:p.login :p.url :p.password :p.id]
-            :from [[:users :u]]
-            :join [[:passwords :p] [:= :u.username :p.username]]
-            :where [:= :u.username "s"]} :join)
 
 (defn list-passwords [db u]
   (map (fn [e]
